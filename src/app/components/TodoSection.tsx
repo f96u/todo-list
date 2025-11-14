@@ -19,52 +19,57 @@ export function TodoSection() {
   const [dataLoading, setDataLoading] = useState(false);
   const { user, loading: authLoading } = useAuth();
 
-  // 認証後にFirestoreからデータを取得
-  useEffect(() => {
-    if (!authLoading && user) {
-      checkAndLoadTodos(user.uid);
-    }
-  }, [user, authLoading]);
-
   // 全体のローディング状態（認証中またはデータ取得中）
   const loading = authLoading || dataLoading;
 
-  // users/{userId}ドキュメント内のtodolistフィールドの存在確認とデータ取得
-  const checkAndLoadTodos = async (userId: string) => {
-    setDataLoading(true);
-    try {
-      const userRef = doc(db, 'users', userId);
-      const userDoc = await getDoc(userRef);
-      
-      if (userDoc.exists()) {
-        // ドキュメントが存在する場合は、todolistフィールドからtodos配列を取得
-        const data = userDoc.data();
-        const todosData: Todo[] = data.todolist?.todos || data.todos || [];
-        // createdAtをDateオブジェクトに変換
-        const todosWithDates = todosData.map((todo: Todo & { createdAt?: Timestamp | Date }) => ({
-          ...todo,
-          createdAt: todo.createdAt && 'toDate' in todo.createdAt 
-            ? (todo.createdAt as Timestamp).toDate() 
-            : todo.createdAt,
-        }));
-        // createdAtでソート（新しい順）
-        todosWithDates.sort((a: Todo, b: Todo) => {
-          const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return bDate - aDate;
-        });
-        setTodos(todosWithDates);
-      } else {
-        // ドキュメントが存在しない場合は、空の配列で初期化
-        await setDoc(userRef, { todolist: { todos: [] } });
-        setTodos([]);
+  // 認証後にFirestoreからデータを取得
+  useEffect(() => {
+    if (authLoading || !user) return;
+
+    const loadTodos = async () => {
+      setDataLoading(true);
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userRef);
+        
+        if (userDoc.exists()) {
+          // ドキュメントが存在する場合は、todolistフィールドからtodos配列を取得
+          const data = userDoc.data();
+          const todosData: Todo[] = data.todolist?.todos || data.todos || [];
+          // createdAtをDateオブジェクトに変換
+          const todosWithDates = todosData.map((todo: Todo & { createdAt?: Timestamp | Date }) => ({
+            ...todo,
+            createdAt: todo.createdAt && 'toDate' in todo.createdAt 
+              ? (todo.createdAt as Timestamp).toDate() 
+              : todo.createdAt,
+          }));
+          // createdAtでソート（新しい順）
+          todosWithDates.sort((a: Todo, b: Todo) => {
+            const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return bDate - aDate;
+          });
+          setTodos(todosWithDates);
+        } else {
+          // ドキュメントが存在しない場合は、空の配列で初期化し、expireAtを設定
+          const now = new Date();
+          const expireAt = new Date(now);
+          expireAt.setDate(expireAt.getDate() + 7); // 7日後
+          
+          await setDoc(userRef, {
+            todolist: { todos: [] },
+            expireAt: Timestamp.fromDate(expireAt),
+          });
+        }
+      } catch (error) {
+        console.error('Error checking/loading todos:', error);
+      } finally {
+        setDataLoading(false);
       }
-    } catch (error) {
-      console.error('Error checking/loading todos:', error);
-    } finally {
-      setDataLoading(false);
-    }
-  };
+    };
+
+    loadTodos();
+  }, [user, authLoading]);
 
   const addTodo = async () => {
     if (inputText.trim() === '' || !user) return;
@@ -82,7 +87,9 @@ export function TodoSection() {
       await updateDoc(userRef, {
         todolist: {
           todos: updatedTodos.map(todo => ({
-            ...todo,
+            id: todo.id,
+            text: todo.text,
+            completed: todo.completed,
             createdAt: Timestamp.fromDate(todo.createdAt || new Date()),
           })),
         },
