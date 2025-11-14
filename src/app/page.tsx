@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { getDoc, setDoc, updateDoc, doc, Timestamp } from 'firebase/firestore';
-import { signInAnonymously, onAuthStateChanged, User } from 'firebase/auth';
-import { db, auth } from './firebase/config';
+import { db } from './firebase/config';
+import { useAuth } from './provider/AuthProvider';
 
 interface Todo {
   id: string;
@@ -17,33 +17,22 @@ export default function Home() {
   const [inputText, setInputText] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<User | null>(null);
+  const [dataLoading, setDataLoading] = useState(false);
+  const { user, loading: authLoading } = useAuth();
 
-  // ゲストログイン（匿名認証）を強制
+  // 認証後にFirestoreからデータを取得
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-        // 認証後にFirestoreからデータを取得
-        await checkAndLoadTodos(currentUser.uid);
-      } else {
-        // 未認証の場合は匿名認証を実行
-        try {
-          const userCredential = await signInAnonymously(auth);
-          setUser(userCredential.user);
-        } catch (error) {
-          console.error('Error signing in anonymously:', error);
-          setLoading(false);
-        }
-      }
-    });
+    if (!authLoading && user) {
+      checkAndLoadTodos(user.uid);
+    }
+  }, [user, authLoading]);
 
-    return () => unsubscribe();
-  }, []);
+  // 全体のローディング状態（認証中またはデータ取得中）
+  const loading = authLoading || dataLoading;
 
   // users/{userId}ドキュメント内のtodolistフィールドの存在確認とデータ取得
   const checkAndLoadTodos = async (userId: string) => {
+    setDataLoading(true);
     try {
       const userRef = doc(db, 'users', userId);
       const userDoc = await getDoc(userRef);
@@ -74,7 +63,7 @@ export default function Home() {
     } catch (error) {
       console.error('Error checking/loading todos:', error);
     } finally {
-      setLoading(false);
+      setDataLoading(false);
     }
   };
 
