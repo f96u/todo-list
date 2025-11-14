@@ -1,14 +1,167 @@
+'use client';
+
+import { useState } from 'react';
+
+interface Todo {
+  id: number;
+  text: string;
+  completed: boolean;
+}
+
 export default function Home() {
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState('');
+
+  const addTodo = () => {
+    if (inputText.trim() === '') return;
+    
+    const newTodo: Todo = {
+      id: Date.now(),
+      text: inputText.trim(),
+      completed: false,
+    };
+    
+    setTodos([...todos, newTodo]);
+    setInputText('');
+  };
+
+  const startEdit = (todo: Todo) => {
+    setEditingId(todo.id);
+    setEditingText(todo.text);
+  };
+
+  const saveEdit = (id: number) => {
+    if (editingText.trim() === '') return;
+    
+    setTodos(todos.map(todo => 
+      todo.id === id ? { ...todo, text: editingText.trim() } : todo
+    ));
+    setEditingId(null);
+    setEditingText('');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingText('');
+  };
+
+  const deleteTodo = (id: number) => {
+    setTodos(todos.filter(todo => todo.id !== id));
+  };
+
+  const toggleComplete = (id: number) => {
+    setTodos(todos.map(todo => 
+      todo.id === id ? { ...todo, completed: !todo.completed } : todo
+    ));
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <main className="text-center">
-        <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
-          Hello, World!
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4">
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-4xl font-bold text-center text-gray-900 dark:text-white mb-8">
+          Todo List
         </h1>
-        <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
-          Next.jsアプリケーションが正常に動作しています。
-        </p>
-      </main>
+
+        {/* Todo追加フォーム */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && addTodo()}
+              placeholder="新しいTodoを入力..."
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            />
+            <button
+              onClick={addTodo}
+              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            >
+              追加
+            </button>
+          </div>
+        </div>
+
+        {/* Todoリスト */}
+        <div className="space-y-2">
+          {todos.length === 0 ? (
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+              Todoがありません。上記のフォームから追加してください。
+            </div>
+          ) : (
+            todos.map((todo) => (
+              <div
+                key={todo.id}
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 flex items-center gap-3"
+              >
+                {/* 完了チェックボックス */}
+                <input
+                  type="checkbox"
+                  checked={todo.completed}
+                  onChange={() => toggleComplete(todo.id)}
+                  className="w-5 h-5 text-blue-500 rounded focus:ring-2 focus:ring-blue-500"
+                />
+
+                {/* Todoテキストまたは編集フィールド */}
+                {editingId === todo.id ? (
+                  <div className="flex-1 flex gap-2">
+                    <input
+                      type="text"
+                      value={editingText}
+                      onChange={(e) => setEditingText(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') saveEdit(todo.id);
+                        if (e.key === 'Escape') cancelEdit();
+                      }}
+                      className="flex-1 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => saveEdit(todo.id)}
+                      className="px-4 py-1 bg-green-500 text-white rounded hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
+                    >
+                      保存
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      className="px-4 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
+                    >
+                      キャンセル
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <span
+                      className={`flex-1 ${
+                        todo.completed
+                          ? 'line-through text-gray-500 dark:text-gray-400'
+                          : 'text-gray-900 dark:text-white'
+                      }`}
+                    >
+                      {todo.text}
+                    </span>
+                    <button
+                      onClick={() => startEdit(todo)}
+                      className="px-4 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-colors"
+                      disabled={todo.completed}
+                    >
+                      編集
+                    </button>
+                    <button
+                      onClick={() => deleteTodo(todo.id)}
+                      className="px-4 py-1 bg-red-500 text-white rounded hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
+                    >
+                      削除
+                    </button>
+                  </>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
