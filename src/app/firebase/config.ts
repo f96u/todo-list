@@ -3,13 +3,13 @@ import { getAuth } from "firebase/auth";
 import { initializeApp } from "firebase/app";
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '',
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || '',
+  apiKey: "AIzaSyAM8-6mkYp6nhrk9476QYXaIqv1jzrnwWc",
+  authDomain: "todo-list-e8a5c.firebaseapp.com",
+  projectId: "todo-list-e8a5c",
+  storageBucket: "todo-list-e8a5c.firebasestorage.app",
+  messagingSenderId: "769764513550",
+  appId: "1:769764513550:web:a9c23f93c5cd61fa8ca95f",
+  measurementId: "G-21NVBN3ZMH",
 }
 
 export const app = initializeApp(firebaseConfig);
