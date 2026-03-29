@@ -1,13 +1,22 @@
 'use client';
 
 import { useState } from 'react';
+import { formatDueDate, getDueDateStatus } from '../utils/parseDueDate';
 
 interface Todo {
   id: string;
   text: string;
   completed: boolean;
   createdAt?: Date;
+  dueDate?: Date;
 }
+
+const dueDateStyles: Record<ReturnType<typeof getDueDateStatus>, string> = {
+  overdue: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+  today:   'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+  soon:    'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+  future:  'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+};
 
 interface TodoListProps {
   todos: Todo[];
@@ -15,6 +24,7 @@ interface TodoListProps {
   onEditSave: (id: string, text: string) => void;
   onToggleComplete: (id: string) => void;
   onDelete: (id: string) => void;
+  onClearDueDate: (id: string) => void;
 }
 
 export function TodoList({
@@ -23,6 +33,7 @@ export function TodoList({
   onEditSave,
   onToggleComplete,
   onDelete,
+  onClearDueDate,
 }: TodoListProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
@@ -103,15 +114,35 @@ export function TodoList({
             </div>
           ) : (
             <>
-              <span
-                className={`flex-1 ${
-                  todo.completed
-                    ? 'line-through text-gray-500 dark:text-gray-400'
-                    : 'text-gray-900 dark:text-white'
-                }`}
-              >
-                {todo.text}
-              </span>
+              <div className="flex-1 min-w-0">
+                <span
+                  className={`${
+                    todo.completed
+                      ? 'line-through text-gray-500 dark:text-gray-400'
+                      : 'text-gray-900 dark:text-white'
+                  }`}
+                >
+                  {todo.text}
+                </span>
+                {todo.dueDate && (
+                  <span
+                    className={`group ml-2 inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded ${
+                      todo.completed
+                        ? 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
+                        : dueDateStyles[getDueDateStatus(todo.dueDate)]
+                    }`}
+                  >
+                    {formatDueDate(todo.dueDate)}
+                    <button
+                      onClick={() => onClearDueDate(todo.id)}
+                      className="hidden group-hover:inline-flex items-center justify-center w-3.5 h-3.5 rounded-full hover:bg-black/20 dark:hover:bg-white/20 transition-colors"
+                      aria-label="期日を削除"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )}
+              </div>
               <button
                 onClick={() => startEdit(todo)}
                 className="px-4 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-colors"

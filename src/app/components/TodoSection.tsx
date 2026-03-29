@@ -5,12 +5,14 @@ import { getDoc, setDoc, updateDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../provider/AuthProvider';
 import { TodoList } from './TodoList';
+import { parseDueDate } from '../utils/parseDueDate';
 
 interface Todo {
   id: string;
   text: string;
   completed: boolean;
   createdAt?: Date;
+  dueDate?: Date;
 }
 
 export function TodoSection() {
@@ -37,11 +39,14 @@ export function TodoSection() {
           const data = userDoc.data();
           const todosData: Todo[] = data.todolist?.todos || data.todos || [];
           // createdAtをDateオブジェクトに変換
-          const todosWithDates = todosData.map((todo: Todo & { createdAt?: Timestamp | Date }) => ({
+          const todosWithDates = todosData.map((todo: Todo & { createdAt?: Timestamp | Date; dueDate?: Timestamp | Date }) => ({
             ...todo,
-            createdAt: todo.createdAt && 'toDate' in todo.createdAt 
-              ? (todo.createdAt as Timestamp).toDate() 
+            createdAt: todo.createdAt && 'toDate' in todo.createdAt
+              ? (todo.createdAt as Timestamp).toDate()
               : todo.createdAt,
+            dueDate: todo.dueDate && 'toDate' in todo.dueDate
+              ? (todo.dueDate as Timestamp).toDate()
+              : todo.dueDate,
           }));
           // createdAtでソート（新しい順）
           todosWithDates.sort((a: Todo, b: Todo) => {
@@ -77,15 +82,17 @@ export function TodoSection() {
 
   const addTodo = async () => {
     if (inputText.trim() === '' || !user) return;
-    
+
     try {
+      const { text, dueDate } = parseDueDate(inputText.trim());
       const newTodo: Todo = {
         id: Date.now().toString(),
-        text: inputText.trim(),
+        text,
         completed: false,
         createdAt: new Date(),
+        dueDate,
       };
-      
+
       const updatedTodos = [newTodo, ...todos];
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
@@ -95,6 +102,7 @@ export function TodoSection() {
             text: todo.text,
             completed: todo.completed,
             createdAt: Timestamp.fromDate(todo.createdAt || new Date()),
+            ...(todo.dueDate ? { dueDate: Timestamp.fromDate(todo.dueDate) } : {}),
           })),
         },
       });
@@ -108,10 +116,13 @@ export function TodoSection() {
 
   const saveEdit = async (id: string, text: string) => {
     if (text.trim() === '' || !user) return;
-    
+
     try {
-      const updatedTodos = todos.map(todo => 
-        todo.id === id ? { ...todo, text: text.trim() } : todo
+      const { text: parsedText, dueDate } = parseDueDate(text.trim());
+      const updatedTodos = todos.map(todo =>
+        todo.id === id
+          ? { ...todo, text: parsedText, dueDate: dueDate ?? todo.dueDate }
+          : todo
       );
       
       const userRef = doc(db, 'users', user.uid);
@@ -120,6 +131,7 @@ export function TodoSection() {
           todos: updatedTodos.map(todo => ({
             ...todo,
             createdAt: todo.createdAt ? Timestamp.fromDate(new Date(todo.createdAt)) : Timestamp.now(),
+            ...(todo.dueDate ? { dueDate: Timestamp.fromDate(new Date(todo.dueDate)) } : {}),
           })),
         },
       });
@@ -141,6 +153,7 @@ export function TodoSection() {
           todos: updatedTodos.map(todo => ({
             ...todo,
             createdAt: todo.createdAt ? Timestamp.fromDate(new Date(todo.createdAt)) : Timestamp.now(),
+            ...(todo.dueDate ? { dueDate: Timestamp.fromDate(new Date(todo.dueDate)) } : {}),
           })),
         },
       });
@@ -148,6 +161,33 @@ export function TodoSection() {
       setTodos(updatedTodos);
     } catch (error) {
       console.error('Error deleting todo:', error);
+    }
+  };
+
+  const clearDueDate = async (id: string) => {
+    if (!user) return;
+
+    try {
+      const updatedTodos = todos.map(todo =>
+        todo.id === id ? { ...todo, dueDate: undefined } : todo
+      );
+
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        todolist: {
+          todos: updatedTodos.map(todo => ({
+            id: todo.id,
+            text: todo.text,
+            completed: todo.completed,
+            createdAt: todo.createdAt ? Timestamp.fromDate(new Date(todo.createdAt)) : Timestamp.now(),
+            ...(todo.dueDate ? { dueDate: Timestamp.fromDate(new Date(todo.dueDate)) } : {}),
+          })),
+        },
+      });
+
+      setTodos(updatedTodos);
+    } catch (error) {
+      console.error('Error clearing due date:', error);
     }
   };
 
@@ -165,6 +205,7 @@ export function TodoSection() {
           todos: updatedTodos.map(todo => ({
             ...todo,
             createdAt: todo.createdAt ? Timestamp.fromDate(new Date(todo.createdAt)) : Timestamp.now(),
+            ...(todo.dueDate ? { dueDate: Timestamp.fromDate(new Date(todo.dueDate)) } : {}),
           })),
         },
       });
@@ -201,6 +242,7 @@ export function TodoSection() {
         onEditSave={saveEdit}
         onToggleComplete={toggleComplete}
         onDelete={deleteTodo}
+        onClearDueDate={clearDueDate}
       />
     </>
   );
