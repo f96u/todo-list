@@ -51,15 +51,19 @@ export function TodoSection() {
           });
           setTodos(todosWithDates);
         } else {
-          // ドキュメントが存在しない場合は、空の配列で初期化し、expireAtを設定
-          const now = new Date();
-          const expireAt = new Date(now);
-          expireAt.setDate(expireAt.getDate() + 7); // 7日後
-          
-          await setDoc(userRef, {
+          // ドキュメントが存在しない場合は空の配列で初期化
+          // Googleログインユーザーはexpireを設定しない（匿名ユーザーのみ7日後に期限を設定）
+          const docData: { todolist: { todos: [] }; expireAt?: Timestamp } = {
             todolist: { todos: [] },
-            expireAt: Timestamp.fromDate(expireAt),
-          });
+          };
+
+          if (user.isAnonymous) {
+            const expireAt = new Date();
+            expireAt.setDate(expireAt.getDate() + 7);
+            docData.expireAt = Timestamp.fromDate(expireAt);
+          }
+
+          await setDoc(userRef, docData);
         }
       } catch (error) {
         console.error('Error checking/loading todos:', error);
