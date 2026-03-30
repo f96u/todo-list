@@ -57,8 +57,16 @@ export function TodoList({
 
   if (loading) {
     return (
-      <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-        読み込み中...
+      <div className="space-y-2">
+        {[40, 65, 50].map((width, i) => (
+          <div
+            key={i}
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 p-4 flex items-center gap-3"
+          >
+            <div className="w-4 h-4 rounded bg-gray-200 dark:bg-gray-700 animate-pulse shrink-0" />
+            <div className="h-4 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" style={{ width: `${width}%` }} />
+          </div>
+        ))}
       </div>
     );
   }

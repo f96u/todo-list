@@ -1,22 +1,45 @@
 'use client';
 
 import { useEffect, useState, createContext, useContext, ReactNode } from 'react';
-import { signInAnonymously, onAuthStateChanged, User, GoogleAuthProvider, linkWithPopup, signInWithPopup } from 'firebase/auth';
+import {
+  signInAnonymously,
+  onAuthStateChanged,
+  User,
+  GoogleAuthProvider,
+  signInWithPopup,
+  linkWithPopup,
+  signInWithCredential,
+  signOut as firebaseSignOut,
+  updateProfile,
+} from 'firebase/auth';
 import { auth } from '../firebase/config';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   signInWithGoogle: async () => {},
+  signOut: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
+
+async function syncGoogleProfile(user: User): Promise<void> {
+  const googleData = user.providerData.find(p => p.providerId === 'google.com');
+  if (!googleData) return;
+  if (!user.displayName || !user.photoURL) {
+    await updateProfile(user, {
+      displayName: user.displayName || googleData.displayName || undefined,
+      photoURL: user.photoURL || googleData.photoURL || undefined,
+    });
+  }
+}
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -32,7 +55,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUser(currentUser);
         setLoading(false);
       } else {
-        // 未認証の場合は匿名認証を実行
         try {
           const userCredential = await signInAnonymously(auth);
           setUser(userCredential.user);
@@ -49,37 +71,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
-    try {
-      if (user?.isAnonymous) {
-        // 匿名ユーザーのデータを引き継いでGoogleアカウントにリンク
+
+    if (user && user.isAnonymous) {
+      try {
         const result = await linkWithPopup(user, provider);
+        await syncGoogleProfile(result.user);
         setUser(result.user);
-      } else {
-        const result = await signInWithPopup(auth, provider);
-        setUser(result.user);
+      } catch (error: unknown) {
+        const code = error && typeof error === 'object' && 'code' in error
+          ? (error as { code: string }).code
+          : '';
+        if (code === 'auth/credential-already-in-use' || code === 'auth/email-already-in-use') {
+          const credential = GoogleAuthProvider.credentialFromError(error as Parameters<typeof GoogleAuthProvider.credentialFromError>[0]);
+          if (credential) {
+            const result = await signInWithCredential(auth, credential);
+            await syncGoogleProfile(result.user);
+            setUser(result.user);
+          }
+        } else {
+          throw error;
+        }
       }
-    } catch (error: unknown) {
-      // すでにGoogleアカウントが存在する場合はサインインにフォールバック
-      if (
-        error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        (error.code === 'auth/credential-already-in-use' ||
-          error.code === 'auth/email-already-in-use')
-      ) {
-        const result = await signInWithPopup(auth, provider);
-        setUser(result.user);
-      } else {
-        console.error('Error signing in with Google:', error);
-        throw error;
-      }
+    } else {
+      const result = await signInWithPopup(auth, provider);
+      await syncGoogleProfile(result.user);
+      setUser(result.user);
     }
   };
 
+  const signOut = async () => {
+    await firebaseSignOut(auth);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   );
 }
-
