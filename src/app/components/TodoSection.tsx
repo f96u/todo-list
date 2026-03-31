@@ -145,12 +145,18 @@ export function TodoSection() {
 
   const toggleComplete = async (id: string) => {
     if (!user) return;
+    const optimisticTodos = todos.map(t =>
+      t.id === id ? { ...t, completed: !t.completed } : t
+    );
+    setTodos(optimisticTodos);
     try {
-      await saveTodos(todos.map(t =>
-        t.id === id ? { ...t, completed: !t.completed } : t
-      ));
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        todolist: { todos: optimisticTodos.map(serializeTodo) },
+      });
     } catch (error) {
       console.error('Error toggling todo completion:', error);
+      setTodos(todos);
     }
   };
 
