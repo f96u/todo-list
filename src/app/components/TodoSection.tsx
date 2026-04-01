@@ -21,7 +21,7 @@ function serializeTodo(todo: Todo) {
     id: todo.id,
     text: todo.text,
     createdAt: Timestamp.fromDate(new Date(todo.createdAt)),
-    blockedReason: todo.blockedReason,
+    blockedReason: todo.blockedReason ?? '',
     ...(todo.dueDate ? { dueDate: Timestamp.fromDate(new Date(todo.dueDate)) } : {}),
     ...(todo.completedAt ? { completedAt: Timestamp.fromDate(new Date(todo.completedAt)) } : {}),
   };

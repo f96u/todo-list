@@ -44,6 +44,7 @@ export function TodoList({
   const [editingText, setEditingText] = useState('');
   const [blockingId, setBlockingId] = useState<string | null>(null);
   const [blockingReason, setBlockingReason] = useState('');
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
 
   const startEdit = (todo: Todo) => {
     setEditingId(todo.id);
@@ -76,6 +77,43 @@ export function TodoList({
     onSetBlocked(id, blockingReason.trim());
     setBlockingId(null);
     setBlockingReason('');
+  };
+
+  const renderTextWithLinks = (text: string) => {
+    const parts = text.split(/(https?:\/\/[^\s]+)/g);
+    return parts.map((part, i) =>
+      /^https?:\/\//.test(part) ? (
+        <button
+          key={i}
+          onClick={(e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(part);
+            setCopiedUrl(part);
+            setTimeout(() => setCopiedUrl(null), 2000);
+          }}
+          title={copiedUrl === part ? 'コピーしました！' : `クリックしてコピー: ${part}`}
+          className={`inline-flex items-center mx-0.5 transition-colors ${
+            copiedUrl === part
+              ? 'text-green-500 dark:text-green-400'
+              : 'text-blue-400 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300'
+          }`}
+          aria-label={`URLをコピー: ${part}`}
+        >
+          {copiedUrl === part ? (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path fillRule="evenodd" d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-4a.75.75 0 0 1 1.5 0v4A2.25 2.25 0 0 1 12.75 17h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h5a.75.75 0 0 1 0 1.5h-5Z" clipRule="evenodd" />
+              <path fillRule="evenodd" d="M6.194 12.753a.75.75 0 0 0 1.06.053L16.5 4.44v2.81a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.553l-9.056 8.194a.75.75 0 0 0-.053 1.06Z" clipRule="evenodd" />
+            </svg>
+          )}
+        </button>
+      ) : (
+        part
+      )
+    );
   };
 
   if (loading) {
@@ -198,7 +236,7 @@ export function TodoList({
                       : 'text-gray-900 dark:text-white'
                   }`}
                 >
-                  {todo.text}
+                  {renderTextWithLinks(todo.text)}
                 </span>
                 {todo.dueDate && (
                   <span
