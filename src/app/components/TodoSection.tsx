@@ -13,6 +13,8 @@ interface Todo {
   completed: boolean;
   createdAt?: Date;
   dueDate?: Date;
+  blocked?: boolean;
+  blockedReason?: string;
 }
 
 function serializeTodo(todo: Todo) {
@@ -22,6 +24,7 @@ function serializeTodo(todo: Todo) {
     completed: todo.completed,
     createdAt: todo.createdAt ? Timestamp.fromDate(new Date(todo.createdAt)) : Timestamp.now(),
     ...(todo.dueDate ? { dueDate: Timestamp.fromDate(new Date(todo.dueDate)) } : {}),
+    ...(todo.blocked ? { blocked: true, blockedReason: todo.blockedReason ?? '' } : {}),
   };
 }
 
@@ -143,6 +146,28 @@ export function TodoSection() {
     }
   };
 
+  const setBlocked = async (id: string, reason: string) => {
+    if (!user) return;
+    try {
+      await saveTodos(todos.map(todo =>
+        todo.id === id ? { ...todo, blocked: true, blockedReason: reason } : todo
+      ));
+    } catch (error) {
+      console.error('Error setting blocked:', error);
+    }
+  };
+
+  const unblock = async (id: string) => {
+    if (!user) return;
+    try {
+      await saveTodos(todos.map(todo =>
+        todo.id === id ? { ...todo, blocked: false, blockedReason: undefined } : todo
+      ));
+    } catch (error) {
+      console.error('Error unblocking todo:', error);
+    }
+  };
+
   const toggleComplete = async (id: string) => {
     if (!user) return;
     const optimisticTodos = todos.map(t =>
@@ -190,6 +215,8 @@ export function TodoSection() {
         onToggleComplete={toggleComplete}
         onDelete={deleteTodo}
         onClearDueDate={clearDueDate}
+        onSetBlocked={setBlocked}
+        onUnblock={unblock}
       />
     </>
   );
