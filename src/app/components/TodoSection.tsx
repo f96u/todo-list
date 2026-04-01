@@ -10,22 +10,19 @@ import { parseDueDate } from '../utils/parseDueDate';
 interface Todo {
   id: string;
   text: string;
-  completed: boolean;
-  createdAt?: Date;
+  createdAt: Date;
   dueDate?: Date;
-  blocked?: boolean;
-  blockedReason?: string;
   completedAt?: Date;
+  blockedReason: string;
 }
 
 function serializeTodo(todo: Todo) {
   return {
     id: todo.id,
     text: todo.text,
-    completed: todo.completed,
-    createdAt: todo.createdAt ? Timestamp.fromDate(new Date(todo.createdAt)) : Timestamp.now(),
+    createdAt: Timestamp.fromDate(new Date(todo.createdAt)),
+    blockedReason: todo.blockedReason,
     ...(todo.dueDate ? { dueDate: Timestamp.fromDate(new Date(todo.dueDate)) } : {}),
-    ...(todo.blocked ? { blocked: true, blockedReason: todo.blockedReason ?? '' } : {}),
     ...(todo.completedAt ? { completedAt: Timestamp.fromDate(new Date(todo.completedAt)) } : {}),
   };
 }
@@ -50,11 +47,11 @@ export function TodoSection() {
         if (userDoc.exists()) {
           const data = userDoc.data();
           const todosData: Todo[] = data.todolist?.todos || data.todos || [];
-          const todosWithDates = todosData.map((todo: Todo & { createdAt?: Timestamp | Date; dueDate?: Timestamp | Date; completedAt?: Timestamp | Date }) => ({
+          const todosWithDates = todosData.map((todo: Todo & { createdAt: Timestamp | Date; dueDate?: Timestamp | Date; completedAt?: Timestamp | Date }) => ({
             ...todo,
-            createdAt: todo.createdAt && 'toDate' in todo.createdAt
+            createdAt: 'toDate' in todo.createdAt
               ? (todo.createdAt as Timestamp).toDate()
-              : todo.createdAt,
+              : todo.createdAt as Date,
             dueDate: todo.dueDate && 'toDate' in todo.dueDate
               ? (todo.dueDate as Timestamp).toDate()
               : todo.dueDate,
@@ -100,9 +97,9 @@ export function TodoSection() {
       const newTodo: Todo = {
         id: Date.now().toString(),
         text,
-        completed: false,
         createdAt: new Date(),
         dueDate,
+        blockedReason: '',
       };
       await saveTodos([newTodo, ...todos]);
       setInputText('');
@@ -150,7 +147,7 @@ export function TodoSection() {
     if (!user) return;
     try {
       await saveTodos(todos.map(todo =>
-        todo.id === id ? { ...todo, blocked: true, blockedReason: reason } : todo
+        todo.id === id ? { ...todo, blockedReason: reason } : todo
       ));
     } catch (error) {
       console.error('Error setting blocked:', error);
@@ -161,7 +158,7 @@ export function TodoSection() {
     if (!user) return;
     try {
       await saveTodos(todos.map(todo =>
-        todo.id === id ? { ...todo, blocked: false, blockedReason: undefined } : todo
+        todo.id === id ? { ...todo, blockedReason: '' } : todo
       ));
     } catch (error) {
       console.error('Error unblocking todo:', error);
@@ -172,7 +169,7 @@ export function TodoSection() {
     if (!user) return;
     const optimisticTodos = todos.map(t =>
       t.id === id
-        ? { ...t, completed: !t.completed, completedAt: !t.completed ? new Date() : undefined }
+        ? { ...t, completedAt: !t.completedAt ? new Date() : undefined }
         : t
     );
     setTodos(optimisticTodos);
@@ -191,13 +188,15 @@ export function TodoSection() {
   today.setHours(0, 0, 0, 0);
 
   const visibleTodos = todos
-    .filter(todo => !todo.completed || (todo.completedAt && todo.completedAt >= today))
+    .filter(todo => !todo.completedAt || todo.completedAt >= today)
     .sort((a, b) => {
-      if (a.completed !== b.completed) return a.completed ? 1 : -1;
-      if (a.completed && b.completed) {
+      const aCompleted = !!a.completedAt;
+      const bCompleted = !!b.completedAt;
+      if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
+      if (aCompleted && bCompleted) {
         return (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0);
       }
-      return (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0);
+      return b.createdAt.getTime() - a.createdAt.getTime();
     });
 
   return (

@@ -6,12 +6,10 @@ import { formatDueDate, getDueDateStatus } from '../utils/parseDueDate';
 interface Todo {
   id: string;
   text: string;
-  completed: boolean;
-  createdAt?: Date;
+  createdAt: Date;
   dueDate?: Date;
-  blocked?: boolean;
-  blockedReason?: string;
   completedAt?: Date;
+  blockedReason: string;
 }
 
 const dueDateStyles: Record<ReturnType<typeof getDueDateStatus>, string> = {
@@ -110,13 +108,13 @@ export function TodoList({
         <div
           key={todo.id}
           className={`group bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 p-4 flex items-center gap-3 transition-shadow hover:shadow-md ${
-            todo.blocked && !todo.completed ? 'border-l-4 border-l-amber-400 dark:border-l-amber-500' : ''
+            !!todo.blockedReason && !todo.completedAt ? 'border-l-4 border-l-amber-400 dark:border-l-amber-500' : ''
           }`}
         >
           {/* 完了チェックボックス */}
           <input
             type="checkbox"
-            checked={todo.completed}
+            checked={!!todo.completedAt}
             onChange={() => onToggleComplete(todo.id)}
             className="w-4 h-4 text-blue-500 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
           />
@@ -195,7 +193,7 @@ export function TodoList({
               <div className="flex-1 min-w-0">
                 <span
                   className={`${
-                    todo.completed
+                    !!todo.completedAt
                       ? 'line-through text-gray-400 dark:text-gray-500'
                       : 'text-gray-900 dark:text-white'
                   }`}
@@ -205,7 +203,7 @@ export function TodoList({
                 {todo.dueDate && (
                   <span
                     className={`group/badge ml-2 inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded ${
-                      todo.completed
+                      !!todo.completedAt
                         ? 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
                         : dueDateStyles[getDueDateStatus(todo.dueDate)]
                     }`}
@@ -220,7 +218,7 @@ export function TodoList({
                     </button>
                   </span>
                 )}
-                {todo.blocked && !todo.completed && (
+                {!!todo.blockedReason && !todo.completedAt && (
                   <span className="group/block ml-2 inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
                       <path fillRule="evenodd" d="M8 1a3.5 3.5 0 0 0-3.5 3.5V7A1.5 1.5 0 0 0 3 8.5v5A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11 7V4.5A3.5 3.5 0 0 0 8 1Zm2 6V4.5a2 2 0 1 0-4 0V7h4Z" clipRule="evenodd" />
@@ -239,7 +237,7 @@ export function TodoList({
 
               {/* アクションボタン（ホバー時のみ表示） */}
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                {!todo.completed && (
+                {!todo.completedAt && (
                   <>
                     <button
                       onClick={() => startEdit(todo)}
@@ -252,13 +250,13 @@ export function TodoList({
                       </svg>
                     </button>
                     <button
-                      onClick={() => todo.blocked ? onUnblock(todo.id) : startBlocking(todo)}
+                      onClick={() => !!todo.blockedReason ? onUnblock(todo.id) : startBlocking(todo)}
                       className={`p-1.5 rounded-lg transition-colors ${
-                        todo.blocked
+                        !!todo.blockedReason
                           ? 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20'
                           : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:text-amber-400 dark:hover:bg-amber-900/20'
                       }`}
-                      aria-label={todo.blocked ? '待機を解除' : '待機状態に設定'}
+                      aria-label={!!todo.blockedReason ? '待機を解除' : '待機状態に設定'}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                         <path fillRule="evenodd" d="M10 1a4.5 4.5 0 0 0-4.5 4.5V9H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-.5V5.5A4.5 4.5 0 0 0 10 1Zm3 8V5.5a3 3 0 1 0-6 0V9h6Z" clipRule="evenodd" />
