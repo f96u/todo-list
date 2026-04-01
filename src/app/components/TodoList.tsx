@@ -11,6 +11,7 @@ interface Todo {
   dueDate?: Date;
   blocked?: boolean;
   blockedReason?: string;
+  completedAt?: Date;
 }
 
 const dueDateStyles: Record<ReturnType<typeof getDueDateStatus>, string> = {

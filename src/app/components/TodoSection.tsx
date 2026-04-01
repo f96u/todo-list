@@ -15,6 +15,7 @@ interface Todo {
   dueDate?: Date;
   blocked?: boolean;
   blockedReason?: string;
+  completedAt?: Date;
 }
 
 function serializeTodo(todo: Todo) {
@@ -25,6 +26,7 @@ function serializeTodo(todo: Todo) {
     createdAt: todo.createdAt ? Timestamp.fromDate(new Date(todo.createdAt)) : Timestamp.now(),
     ...(todo.dueDate ? { dueDate: Timestamp.fromDate(new Date(todo.dueDate)) } : {}),
     ...(todo.blocked ? { blocked: true, blockedReason: todo.blockedReason ?? '' } : {}),
+    ...(todo.completedAt ? { completedAt: Timestamp.fromDate(new Date(todo.completedAt)) } : {}),
   };
 }
 
@@ -48,7 +50,7 @@ export function TodoSection() {
         if (userDoc.exists()) {
           const data = userDoc.data();
           const todosData: Todo[] = data.todolist?.todos || data.todos || [];
-          const todosWithDates = todosData.map((todo: Todo & { createdAt?: Timestamp | Date; dueDate?: Timestamp | Date }) => ({
+          const todosWithDates = todosData.map((todo: Todo & { createdAt?: Timestamp | Date; dueDate?: Timestamp | Date; completedAt?: Timestamp | Date }) => ({
             ...todo,
             createdAt: todo.createdAt && 'toDate' in todo.createdAt
               ? (todo.createdAt as Timestamp).toDate()
@@ -56,12 +58,10 @@ export function TodoSection() {
             dueDate: todo.dueDate && 'toDate' in todo.dueDate
               ? (todo.dueDate as Timestamp).toDate()
               : todo.dueDate,
+            completedAt: todo.completedAt && 'toDate' in todo.completedAt
+              ? (todo.completedAt as Timestamp).toDate()
+              : todo.completedAt,
           }));
-          todosWithDates.sort((a: Todo, b: Todo) => {
-            const aDate = a.createdAt ? a.createdAt.getTime() : 0;
-            const bDate = b.createdAt ? b.createdAt.getTime() : 0;
-            return bDate - aDate;
-          });
           setTodos(todosWithDates);
         } else {
           const docData: { todolist: { todos: [] }; expireAt?: Timestamp } = {
@@ -171,7 +171,9 @@ export function TodoSection() {
   const toggleComplete = async (id: string) => {
     if (!user) return;
     const optimisticTodos = todos.map(t =>
-      t.id === id ? { ...t, completed: !t.completed } : t
+      t.id === id
+        ? { ...t, completed: !t.completed, completedAt: !t.completed ? new Date() : undefined }
+        : t
     );
     setTodos(optimisticTodos);
     try {
@@ -184,6 +186,19 @@ export function TodoSection() {
       setTodos(todos);
     }
   };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const visibleTodos = todos
+    .filter(todo => !todo.completed || (todo.completedAt && todo.completedAt >= today))
+    .sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      if (a.completed && b.completed) {
+        return (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0);
+      }
+      return (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0);
+    });
 
   return (
     <>
@@ -209,7 +224,7 @@ export function TodoSection() {
         </div>
       </div>
       <TodoList
-        todos={todos}
+        todos={visibleTodos}
         loading={loading}
         onEditSave={saveEdit}
         onToggleComplete={toggleComplete}
