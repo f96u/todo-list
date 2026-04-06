@@ -30,6 +30,19 @@ function parseToken(token: string): Date | null {
     return d;
   }
 
+  if (token.startsWith('来週') && token.slice(2) in WEEKDAYS) {
+    const targetDay = WEEKDAYS[token.slice(2)];
+    // 今週の月曜日を起点に、来週の該当曜日を計算
+    const currentDay = today.getDay();
+    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+    const thisMonday = new Date(today);
+    thisMonday.setDate(today.getDate() - daysFromMonday);
+    const targetDayOffset = targetDay === 0 ? 6 : targetDay - 1;
+    const d = new Date(thisMonday);
+    d.setDate(thisMonday.getDate() + 7 + targetDayOffset);
+    return d;
+  }
+
   const dayMatch = token.match(/^(\d{1,2})日$/);
   if (dayMatch) {
     const day = parseInt(dayMatch[1], 10);
