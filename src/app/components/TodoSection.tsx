@@ -5,6 +5,7 @@ import { getDoc, setDoc, updateDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../provider/AuthProvider';
 import { TodoList } from './TodoList';
+import { GroupSection, Group, GROUP_COLORS } from './GroupSection';
 import { parseDueDate } from '../utils/parseDueDate';
 
 interface Todo {
@@ -14,6 +15,7 @@ interface Todo {
   dueDate?: Date;
   completedAt?: Date;
   blockedReason: string;
+  groupId?: string;
 }
 
 function serializeTodo(todo: Todo) {
@@ -22,14 +24,27 @@ function serializeTodo(todo: Todo) {
     text: todo.text,
     createdAt: Timestamp.fromDate(new Date(todo.createdAt)),
     blockedReason: todo.blockedReason ?? '',
+    ...(todo.groupId ? { groupId: todo.groupId } : {}),
     ...(todo.dueDate ? { dueDate: Timestamp.fromDate(new Date(todo.dueDate)) } : {}),
     ...(todo.completedAt ? { completedAt: Timestamp.fromDate(new Date(todo.completedAt)) } : {}),
   };
 }
 
+function serializeGroup(group: Group) {
+  return {
+    id: group.id,
+    name: group.name,
+    color: group.color,
+    createdAt: Timestamp.fromDate(new Date(group.createdAt)),
+  };
+}
+
 export function TodoSection() {
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
+  const [newTodoGroupId, setNewTodoGroupId] = useState<string | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
   const { user, loading: authLoading } = useAuth();
 
@@ -60,9 +75,18 @@ export function TodoSection() {
               : todo.completedAt,
           }));
           setTodos(todosWithDates);
+          const groupsData: Group[] = (data.todolist?.groups || []).map(
+            (g: Group & { createdAt: Timestamp | Date }) => ({
+              ...g,
+              createdAt: 'toDate' in g.createdAt
+                ? (g.createdAt as Timestamp).toDate()
+                : g.createdAt as Date,
+            })
+          );
+          setGroups(groupsData);
         } else {
-          const docData: { todolist: { todos: [] }; expireAt?: Timestamp } = {
-            todolist: { todos: [] },
+          const docData: { todolist: { todos: []; groups: [] }; expireAt?: Timestamp } = {
+            todolist: { todos: [], groups: [] },
           };
           if (user.isAnonymous) {
             const expireAt = new Date();
@@ -85,9 +109,18 @@ export function TodoSection() {
     if (!user) return;
     const userRef = doc(db, 'users', user.uid);
     await updateDoc(userRef, {
-      todolist: { todos: updatedTodos.map(serializeTodo) },
+      'todolist.todos': updatedTodos.map(serializeTodo),
     });
     setTodos(updatedTodos);
+  };
+
+  const saveGroups = async (updatedGroups: Group[]) => {
+    if (!user) return;
+    const userRef = doc(db, 'users', user.uid);
+    await updateDoc(userRef, {
+      'todolist.groups': updatedGroups.map(serializeGroup),
+    });
+    setGroups(updatedGroups);
   };
 
   const addTodo = async () => {
@@ -100,6 +133,7 @@ export function TodoSection() {
         createdAt: new Date(),
         dueDate,
         blockedReason: '',
+        ...(newTodoGroupId ? { groupId: newTodoGroupId } : {}),
       };
       await saveTodos([newTodo, ...todos]);
       setInputText('');
@@ -176,11 +210,66 @@ export function TodoSection() {
     try {
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
-        todolist: { todos: optimisticTodos.map(serializeTodo) },
+        'todolist.todos': optimisticTodos.map(serializeTodo),
       });
     } catch (error) {
       console.error('Error toggling todo completion:', error);
       setTodos(todos);
+    }
+  };
+
+  const setTodoGroup = async (id: string, groupId: string | null) => {
+    if (!user) return;
+    try {
+      await saveTodos(todos.map(todo =>
+        todo.id === id ? { ...todo, groupId: groupId ?? undefined } : todo
+      ));
+    } catch (error) {
+      console.error('Error setting group:', error);
+    }
+  };
+
+  const addGroup = async (name: string, color: string) => {
+    if (!user) return;
+    try {
+      const newGroup: Group = {
+        id: Date.now().toString(),
+        name,
+        color,
+        createdAt: new Date(),
+      };
+      await saveGroups([...groups, newGroup]);
+    } catch (error) {
+      console.error('Error adding group:', error);
+    }
+  };
+
+  const updateGroup = async (id: string, name: string, color: string) => {
+    if (!user) return;
+    try {
+      await saveGroups(groups.map(g => g.id === id ? { ...g, name, color } : g));
+    } catch (error) {
+      console.error('Error updating group:', error);
+    }
+  };
+
+  const deleteGroup = async (id: string) => {
+    if (!user) return;
+    try {
+      const updatedTodos = todos.map(todo =>
+        todo.groupId === id ? { ...todo, groupId: undefined } : todo
+      );
+      const updatedGroups = groups.filter(g => g.id !== id);
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        'todolist.todos': updatedTodos.map(serializeTodo),
+        'todolist.groups': updatedGroups.map(serializeGroup),
+      });
+      setTodos(updatedTodos);
+      setGroups(updatedGroups);
+      if (activeGroupId === id) setActiveGroupId(null);
+    } catch (error) {
+      console.error('Error deleting group:', error);
     }
   };
 
@@ -189,6 +278,7 @@ export function TodoSection() {
 
   const visibleTodos = todos
     .filter(todo => !todo.completedAt || todo.completedAt >= today)
+    .filter(todo => activeGroupId === null || todo.groupId === activeGroupId)
     .sort((a, b) => {
       const aCompleted = !!a.completedAt;
       const bCompleted = !!b.completedAt;
@@ -204,8 +294,20 @@ export function TodoSection() {
       return b.createdAt.getTime() - a.createdAt.getTime();
     });
 
+  const selectedGroupColor = newTodoGroupId
+    ? (GROUP_COLORS.find(c => c.value === (groups.find(g => g.id === newTodoGroupId)?.color ?? '')) ?? null)
+    : null;
+
   return (
     <>
+      <GroupSection
+        groups={groups}
+        activeGroupId={activeGroupId}
+        onFilterChange={setActiveGroupId}
+        onAddGroup={addGroup}
+        onUpdateGroup={updateGroup}
+        onDeleteGroup={deleteGroup}
+      />
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
         <div className="flex gap-2">
           <input
@@ -216,6 +318,22 @@ export function TodoSection() {
             placeholder="新しいTodoを入力..."
             className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
           />
+          {groups.length > 0 && (
+            <select
+              value={newTodoGroupId ?? ''}
+              onChange={e => setNewTodoGroupId(e.target.value || null)}
+              className={`px-2 py-2 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 cursor-pointer ${
+                selectedGroupColor
+                  ? `${selectedGroupColor.badgeBg} ${selectedGroupColor.badgeText} ${selectedGroupColor.badgeDarkBg} ${selectedGroupColor.badgeDarkText} border-transparent`
+                  : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              <option value="">グループなし</option>
+              {groups.map(g => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+          )}
           <button
             onClick={addTodo}
             className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors shadow-sm"
@@ -229,6 +347,7 @@ export function TodoSection() {
       </div>
       <TodoList
         todos={visibleTodos}
+        groups={groups}
         loading={loading}
         onEditSave={saveEdit}
         onToggleComplete={toggleComplete}
@@ -236,6 +355,7 @@ export function TodoSection() {
         onClearDueDate={clearDueDate}
         onSetBlocked={setBlocked}
         onUnblock={unblock}
+        onSetGroup={setTodoGroup}
       />
     </>
   );

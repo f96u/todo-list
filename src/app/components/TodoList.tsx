@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { formatDueDate, getDueDateStatus } from '../utils/parseDueDate';
+import { Group, GROUP_COLORS } from './GroupSection';
 
 interface Todo {
   id: string;
@@ -10,6 +11,7 @@ interface Todo {
   dueDate?: Date;
   completedAt?: Date;
   blockedReason: string;
+  groupId?: string;
 }
 
 const dueDateStyles: Record<ReturnType<typeof getDueDateStatus>, string> = {
@@ -21,6 +23,7 @@ const dueDateStyles: Record<ReturnType<typeof getDueDateStatus>, string> = {
 
 interface TodoListProps {
   todos: Todo[];
+  groups: Group[];
   loading: boolean;
   onEditSave: (id: string, text: string) => void;
   onToggleComplete: (id: string) => void;
@@ -28,10 +31,12 @@ interface TodoListProps {
   onClearDueDate: (id: string) => void;
   onSetBlocked: (id: string, reason: string) => void;
   onUnblock: (id: string) => void;
+  onSetGroup: (id: string, groupId: string | null) => void;
 }
 
 export function TodoList({
   todos,
+  groups,
   loading,
   onEditSave,
   onToggleComplete,
@@ -39,12 +44,24 @@ export function TodoList({
   onClearDueDate,
   onSetBlocked,
   onUnblock,
+  onSetGroup,
 }: TodoListProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
   const [blockingId, setBlockingId] = useState<string | null>(null);
   const [blockingReason, setBlockingReason] = useState('');
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [groupSelectId, setGroupSelectId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!groupSelectId) return;
+    const handleClick = () => setGroupSelectId(null);
+    const timerId = setTimeout(() => document.addEventListener('click', handleClick), 0);
+    return () => {
+      clearTimeout(timerId);
+      document.removeEventListener('click', handleClick);
+    };
+  }, [groupSelectId]);
 
   const startEdit = (todo: Todo) => {
     setEditingId(todo.id);
@@ -271,10 +288,21 @@ export function TodoList({
                     </button>
                   </span>
                 )}
+                {todo.groupId && (() => {
+                  const group = groups.find(g => g.id === todo.groupId);
+                  if (!group) return null;
+                  const c = GROUP_COLORS.find(col => col.value === group.color) ?? GROUP_COLORS[0];
+                  return (
+                    <span className={`ml-2 inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded ${c.badgeBg} ${c.badgeText} ${c.badgeDarkBg} ${c.badgeDarkText}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+                      {group.name}
+                    </span>
+                  );
+                })()}
               </div>
 
               {/* アクションボタン（ホバー時のみ表示） */}
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className={`flex items-center gap-1 transition-opacity ${groupSelectId === todo.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                 {!todo.completedAt && (
                   <>
                     <button
@@ -300,6 +328,54 @@ export function TodoList({
                         <path fillRule="evenodd" d="M10 1a4.5 4.5 0 0 0-4.5 4.5V9H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-.5V5.5A4.5 4.5 0 0 0 10 1Zm3 8V5.5a3 3 0 1 0-6 0V9h6Z" clipRule="evenodd" />
                       </svg>
                     </button>
+                    {groups.length > 0 && (
+                      <div className="relative">
+                        <button
+                          onClick={e => { e.stopPropagation(); setGroupSelectId(groupSelectId === todo.id ? null : todo.id); }}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            todo.groupId
+                              ? (() => {
+                                  const g = groups.find(gr => gr.id === todo.groupId);
+                                  const c = GROUP_COLORS.find(col => col.value === g?.color) ?? GROUP_COLORS[0];
+                                  return `${c.badgeText} hover:bg-gray-100 dark:hover:bg-gray-700`;
+                                })()
+                              : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-700'
+                          }`}
+                          aria-label="グループを設定"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                            <path fillRule="evenodd" d="M4.5 2A2.5 2.5 0 0 0 2 4.5v3.879a2.5 2.5 0 0 0 .732 1.767l7.5 7.5a2.5 2.5 0 0 0 3.536 0l3.878-3.879a2.5 2.5 0 0 0 0-3.535l-7.5-7.5A2.5 2.5 0 0 0 8.38 2H4.5ZM5 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                        {groupSelectId === todo.id && (
+                          <div
+                            onClick={e => e.stopPropagation()}
+                            className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-10 min-w-36"
+                          >
+                            <button
+                              onClick={() => { onSetGroup(todo.id, null); setGroupSelectId(null); }}
+                              className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 ${!todo.groupId ? 'font-semibold text-gray-800 dark:text-gray-100' : 'text-gray-600 dark:text-gray-300'}`}
+                            >
+                              <span className="w-2 h-2 rounded-full border border-gray-300 dark:border-gray-600" />
+                              グループなし
+                            </button>
+                            {groups.map(group => {
+                              const c = GROUP_COLORS.find(col => col.value === group.color) ?? GROUP_COLORS[0];
+                              return (
+                                <button
+                                  key={group.id}
+                                  onClick={() => { onSetGroup(todo.id, group.id); setGroupSelectId(null); }}
+                                  className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 ${todo.groupId === group.id ? 'font-semibold' : ''} ${c.badgeText} ${c.badgeDarkText}`}
+                                >
+                                  <span className={`w-2 h-2 rounded-full ${c.dot}`} />
+                                  {group.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
                 <button
