@@ -196,6 +196,11 @@ export function TodoSection() {
       if (aCompleted && bCompleted) {
         return (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0);
       }
+      // 未完了: 期限なしを先頭、期限ありは近い順
+      const aHasDue = !!a.dueDate;
+      const bHasDue = !!b.dueDate;
+      if (aHasDue !== bHasDue) return aHasDue ? 1 : -1;
+      if (aHasDue && bHasDue) return a.dueDate!.getTime() - b.dueDate!.getTime();
       return b.createdAt.getTime() - a.createdAt.getTime();
     });
 
