@@ -266,7 +266,8 @@ interface KanbanColumnProps {
   groups: Group[];
   loading?: boolean;
   draggingTodoId: string | null;
-  dragOverColumnId: string | null; // 'null' string or group id
+  /** Encoded as "columnKey" (main zone) or "today:columnKey" (today zone) */
+  dragOverZoneKey: string | null;
   onEditSave: (id: string, text: string) => void;
   onToggleComplete: (id: string) => void;
   onDelete: (id: string) => void;
@@ -278,6 +279,8 @@ interface KanbanColumnProps {
   onDragEnd: () => void;
   onDragOver: (e: React.DragEvent, columnId: string | null) => void;
   onDrop: (e: React.DragEvent, groupId: string | null) => void;
+  onDragOverToday: (e: React.DragEvent, columnId: string | null) => void;
+  onDropToToday: (e: React.DragEvent, columnId: string | null) => void;
   onUpdateGroup?: (id: string, name: string, color: string) => void;
   onDeleteGroup?: (id: string) => void;
 }
@@ -290,7 +293,7 @@ export function KanbanColumn({
   groups,
   loading,
   draggingTodoId,
-  dragOverColumnId,
+  dragOverZoneKey,
   onEditSave,
   onToggleComplete,
   onDelete,
@@ -302,6 +305,8 @@ export function KanbanColumn({
   onDragEnd,
   onDragOver,
   onDrop,
+  onDragOverToday,
+  onDropToToday,
   onUpdateGroup,
   onDeleteGroup,
 }: KanbanColumnProps) {
@@ -313,7 +318,10 @@ export function KanbanColumn({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const columnKey = columnId ?? 'null';
-  const isDragOver = dragOverColumnId === columnKey;
+  const todayZoneKey = 'today:' + columnKey;
+  const isDragOverMain = dragOverZoneKey === columnKey;
+  const isDragOverToday = dragOverZoneKey === todayZoneKey;
+  const isDraggingActive = !!draggingTodoId;
 
   const c = color ? GROUP_COLORS.find(col => col.value === color) ?? GROUP_COLORS[0] : null;
 
@@ -333,14 +341,39 @@ export function KanbanColumn({
   const incompleteTodos = todos.filter(t => !t.completedAt);
   const completedTodos = todos.filter(t => !!t.completedAt);
 
+  // Today zone: incomplete todos that are due today or overdue
+  const todayZoneTodos = incompleteTodos.filter(t => {
+    if (!t.dueDate) return false;
+    const s = getDueDateStatus(t.dueDate);
+    return s === 'today' || s === 'overdue';
+  });
+  // Later zone: remaining incomplete (no dueDate, or future)
+  const laterTodos = incompleteTodos.filter(t => {
+    if (!t.dueDate) return true;
+    const s = getDueDateStatus(t.dueDate);
+    return s !== 'today' && s !== 'overdue';
+  });
+
+  const cardProps = {
+    groups,
+    onEditSave,
+    onToggleComplete,
+    onDelete,
+    onClearDueDate,
+    onSetBlocked,
+    onUnblock,
+    onDragStart,
+    onDragEnd,
+  };
+
   return (
     <div
       className={`flex flex-col rounded-xl border-2 transition-colors min-w-72 w-72 shrink-0 ${
-        isDragOver
+        isDragOverMain
           ? 'border-blue-400 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/30'
           : 'border-transparent bg-gray-100 dark:bg-gray-800/50'
       }`}
-      onDragOver={e => onDragOver(e, columnId)}
+      onDragOver={e => { e.preventDefault(); onDragOver(e, columnId); }}
       onDrop={e => onDrop(e, columnId)}
     >
       {/* カラムヘッダー */}
@@ -422,7 +455,54 @@ export function KanbanColumn({
         )}
       </div>
 
-      {/* タスクリスト */}
+      {/* ── 今日ゾーン ── */}
+      <div
+        className={`mx-3 mb-2 rounded-lg border transition-all ${
+          isDragOverToday
+            ? 'border-orange-400 bg-orange-100/80 dark:border-orange-500 dark:bg-orange-950/50'
+            : todayZoneTodos.length > 0
+              ? 'border-orange-200 bg-orange-50 dark:border-orange-900/50 dark:bg-orange-950/20'
+              : isDraggingActive
+                ? 'border-dashed border-orange-200 dark:border-orange-900/40'
+                : 'border-dashed border-orange-100 dark:border-orange-900/20'
+        }`}
+        onDragOver={e => { e.stopPropagation(); e.preventDefault(); onDragOverToday(e, columnId); }}
+        onDrop={e => { e.stopPropagation(); onDropToToday(e, columnId); }}
+      >
+        {/* 今日ゾーンヘッダー */}
+        <div className="flex items-center gap-1.5 px-2.5 pt-2 pb-1">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-orange-400 dark:text-orange-500 shrink-0">
+            <path d="M10 2a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 2ZM10 15a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 15ZM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM15.657 5.404a.75.75 0 1 0-1.06-1.06l-1.061 1.06a.75.75 0 0 0 1.06 1.06l1.06-1.06ZM6.464 14.596a.75.75 0 1 0-1.06-1.06l-1.06 1.06a.75.75 0 0 0 1.06 1.06l1.06-1.06ZM18 10a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 18 10ZM5 10a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 5 10ZM14.596 15.657a.75.75 0 0 0 1.06-1.06l-1.06-1.061a.75.75 0 1 0-1.06 1.06l1.06 1.061ZM5.404 6.464a.75.75 0 0 0 1.06-1.06l-1.06-1.06a.75.75 0 1 0-1.061 1.06l1.061 1.06Z" />
+          </svg>
+          <span className="text-xs font-semibold text-orange-600 dark:text-orange-400">今日</span>
+          {todayZoneTodos.length > 0 && (
+            <span className="text-xs text-orange-400 dark:text-orange-600">{todayZoneTodos.length}</span>
+          )}
+        </div>
+
+        {/* 今日のタスク */}
+        <div className="px-2 pb-2 space-y-1.5">
+          {loading ? (
+            <div className="h-8 rounded bg-orange-100 dark:bg-orange-900/20 animate-pulse" />
+          ) : todayZoneTodos.length > 0 ? (
+            todayZoneTodos.map(todo => (
+              <TodoCard key={todo.id} todo={todo} isDragging={draggingTodoId === todo.id} {...cardProps} />
+            ))
+          ) : (
+            <div className={`rounded border-2 border-dashed flex items-center justify-center text-xs transition-all ${
+              isDragOverToday
+                ? 'h-12 border-orange-300 dark:border-orange-700 text-orange-400 dark:text-orange-600'
+                : isDraggingActive
+                  ? 'h-10 border-orange-200 dark:border-orange-900/40 text-orange-300 dark:text-orange-800'
+                  : 'h-6 border-orange-100 dark:border-orange-900/20 text-orange-200 dark:text-orange-900'
+            }`}>
+              {isDragOverToday ? 'ここにドロップ' : isDraggingActive ? '' : ''}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── 通常タスクリスト ── */}
       <div className="flex-1 overflow-y-auto px-3 pb-1 space-y-2 min-h-16">
         {loading ? (
           [40, 65, 50].map((width, i) => (
@@ -433,41 +513,19 @@ export function KanbanColumn({
           ))
         ) : (
           <>
-            {incompleteTodos.map(todo => (
-              <TodoCard
-                key={todo.id}
-                todo={todo}
-                groups={groups}
-                onEditSave={onEditSave}
-                onToggleComplete={onToggleComplete}
-                onDelete={onDelete}
-                onClearDueDate={onClearDueDate}
-                onSetBlocked={onSetBlocked}
-                onUnblock={onUnblock}
-                onDragStart={onDragStart}
-                onDragEnd={onDragEnd}
-                isDragging={draggingTodoId === todo.id}
-              />
+            {laterTodos.map(todo => (
+              <TodoCard key={todo.id} todo={todo} isDragging={draggingTodoId === todo.id} {...cardProps} />
             ))}
             {completedTodos.map(todo => (
-              <TodoCard
-                key={todo.id}
-                todo={todo}
-                groups={groups}
-                onEditSave={onEditSave}
-                onToggleComplete={onToggleComplete}
-                onDelete={onDelete}
-                onClearDueDate={onClearDueDate}
-                onSetBlocked={onSetBlocked}
-                onUnblock={onUnblock}
-                onDragStart={onDragStart}
-                onDragEnd={onDragEnd}
-                isDragging={draggingTodoId === todo.id}
-              />
+              <TodoCard key={todo.id} todo={todo} isDragging={draggingTodoId === todo.id} {...cardProps} />
             ))}
-            {incompleteTodos.length === 0 && completedTodos.length === 0 && (
-              <div className={`h-16 rounded-lg border-2 border-dashed flex items-center justify-center text-xs transition-colors ${isDragOver ? 'border-blue-300 text-blue-400' : 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600'}`}>
-                {isDragOver ? 'ここにドロップ' : 'タスクなし'}
+            {laterTodos.length === 0 && completedTodos.length === 0 && (
+              <div className={`h-16 rounded-lg border-2 border-dashed flex items-center justify-center text-xs transition-colors ${
+                isDragOverMain
+                  ? 'border-blue-300 text-blue-400'
+                  : 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600'
+              }`}>
+                {isDragOverMain ? 'ここにドロップ' : 'タスクなし'}
               </div>
             )}
           </>
@@ -517,3 +575,4 @@ export function KanbanColumn({
     </div>
   );
 }
+

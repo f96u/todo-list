@@ -6,7 +6,7 @@ import { db } from '../firebase/config';
 import { useAuth } from '../provider/AuthProvider';
 import { KanbanColumn, Todo } from './KanbanColumn';
 import { Group, GROUP_COLORS } from './GroupSection';
-import { parseDueDate } from '../utils/parseDueDate';
+import { parseDueDate, getDueDateStatus } from '../utils/parseDueDate';
 
 function serializeTodo(todo: Todo) {
   return {
@@ -34,7 +34,7 @@ export function TodoSection() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [draggingTodoId, setDraggingTodoId] = useState<string | null>(null);
-  const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
+  const [dragOverZoneKey, setDragOverZoneKey] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
 
   const loading = authLoading || dataLoading;
@@ -83,135 +83,105 @@ export function TodoSection() {
     loadTodos();
   }, [user, authLoading]);
 
-  const saveTodos = async (updatedTodos: Todo[]) => {
-    if (!user) return;
-    const userRef = doc(db, 'users', user.uid);
-    await updateDoc(userRef, { 'todolist.todos': updatedTodos.map(serializeTodo) });
+  const saveTodos = (updatedTodos: Todo[]) => {
+    const previousTodos = todos;
     setTodos(updatedTodos);
-  };
-
-  const saveGroups = async (updatedGroups: Group[]) => {
     if (!user) return;
     const userRef = doc(db, 'users', user.uid);
-    await updateDoc(userRef, { 'todolist.groups': updatedGroups.map(serializeGroup) });
+    updateDoc(userRef, { 'todolist.todos': updatedTodos.map(serializeTodo) }).catch(error => {
+      console.error('Error saving todos:', error);
+      setTodos(previousTodos);
+    });
+  };
+
+  const saveGroups = (updatedGroups: Group[]) => {
+    const previousGroups = groups;
     setGroups(updatedGroups);
+    if (!user) return;
+    const userRef = doc(db, 'users', user.uid);
+    updateDoc(userRef, { 'todolist.groups': updatedGroups.map(serializeGroup) }).catch(error => {
+      console.error('Error saving groups:', error);
+      setGroups(previousGroups);
+    });
   };
 
-  const addTodo = async (groupId: string | null, text: string) => {
+  const addTodo = (groupId: string | null, text: string) => {
     if (text.trim() === '' || !user) return;
-    try {
-      const { text: parsedText, dueDate } = parseDueDate(text.trim());
-      const newTodo: Todo = {
-        id: Date.now().toString(),
-        text: parsedText,
-        createdAt: new Date(),
-        dueDate,
-        blockedReason: '',
-        ...(groupId ? { groupId } : {}),
-      };
-      await saveTodos([newTodo, ...todos]);
-    } catch (error) {
-      console.error('Error adding todo:', error);
-    }
+    const { text: parsedText, dueDate } = parseDueDate(text.trim());
+    const newTodo: Todo = {
+      id: Date.now().toString(),
+      text: parsedText,
+      createdAt: new Date(),
+      dueDate,
+      blockedReason: '',
+      ...(groupId ? { groupId } : {}),
+    };
+    saveTodos([newTodo, ...todos]);
   };
 
-  const saveEdit = async (id: string, text: string) => {
+  const saveEdit = (id: string, text: string) => {
     if (text.trim() === '' || !user) return;
-    try {
-      const { text: parsedText, dueDate } = parseDueDate(text.trim());
-      await saveTodos(todos.map(todo =>
-        todo.id === id ? { ...todo, text: parsedText, dueDate: dueDate ?? todo.dueDate } : todo
-      ));
-    } catch (error) {
-      console.error('Error updating todo:', error);
-    }
+    const { text: parsedText, dueDate } = parseDueDate(text.trim());
+    saveTodos(todos.map(todo =>
+      todo.id === id ? { ...todo, text: parsedText, dueDate: dueDate ?? todo.dueDate } : todo
+    ));
   };
 
-  const deleteTodo = async (id: string) => {
+  const deleteTodo = (id: string) => {
     if (!user) return;
-    try {
-      await saveTodos(todos.filter(todo => todo.id !== id));
-    } catch (error) {
-      console.error('Error deleting todo:', error);
-    }
+    saveTodos(todos.filter(todo => todo.id !== id));
   };
 
-  const clearDueDate = async (id: string) => {
+  const clearDueDate = (id: string) => {
     if (!user) return;
-    try {
-      await saveTodos(todos.map(todo => todo.id === id ? { ...todo, dueDate: undefined } : todo));
-    } catch (error) {
-      console.error('Error clearing due date:', error);
-    }
+    saveTodos(todos.map(todo => todo.id === id ? { ...todo, dueDate: undefined } : todo));
   };
 
-  const setBlocked = async (id: string, reason: string) => {
+  const setBlocked = (id: string, reason: string) => {
     if (!user) return;
-    try {
-      await saveTodos(todos.map(todo => todo.id === id ? { ...todo, blockedReason: reason } : todo));
-    } catch (error) {
-      console.error('Error setting blocked:', error);
-    }
+    saveTodos(todos.map(todo => todo.id === id ? { ...todo, blockedReason: reason } : todo));
   };
 
-  const unblock = async (id: string) => {
+  const unblock = (id: string) => {
     if (!user) return;
-    try {
-      await saveTodos(todos.map(todo => todo.id === id ? { ...todo, blockedReason: '' } : todo));
-    } catch (error) {
-      console.error('Error unblocking todo:', error);
-    }
+    saveTodos(todos.map(todo => todo.id === id ? { ...todo, blockedReason: '' } : todo));
   };
 
-  const toggleComplete = async (id: string) => {
+  const toggleComplete = (id: string) => {
     if (!user) return;
-    const optimisticTodos = todos.map(t =>
+    saveTodos(todos.map(t =>
       t.id === id ? { ...t, completedAt: !t.completedAt ? new Date() : undefined } : t
-    );
-    setTodos(optimisticTodos);
-    try {
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, { 'todolist.todos': optimisticTodos.map(serializeTodo) });
-    } catch (error) {
-      console.error('Error toggling completion:', error);
-      setTodos(todos);
-    }
+    ));
   };
 
-  const addGroup = async (name: string, color: string) => {
+  const addGroup = (name: string, color: string) => {
     if (!user) return;
-    try {
-      const newGroup: Group = { id: Date.now().toString(), name, color, createdAt: new Date() };
-      await saveGroups([...groups, newGroup]);
-    } catch (error) {
-      console.error('Error adding group:', error);
-    }
+    const newGroup: Group = { id: Date.now().toString(), name, color, createdAt: new Date() };
+    saveGroups([...groups, newGroup]);
   };
 
-  const updateGroup = async (id: string, name: string, color: string) => {
+  const updateGroup = (id: string, name: string, color: string) => {
     if (!user) return;
-    try {
-      await saveGroups(groups.map(g => g.id === id ? { ...g, name, color } : g));
-    } catch (error) {
-      console.error('Error updating group:', error);
-    }
+    saveGroups(groups.map(g => g.id === id ? { ...g, name, color } : g));
   };
 
-  const deleteGroup = async (id: string) => {
+  const deleteGroup = (id: string) => {
     if (!user) return;
-    try {
-      const updatedTodos = todos.map(todo => todo.groupId === id ? { ...todo, groupId: undefined } : todo);
-      const updatedGroups = groups.filter(g => g.id !== id);
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        'todolist.todos': updatedTodos.map(serializeTodo),
-        'todolist.groups': updatedGroups.map(serializeGroup),
-      });
-      setTodos(updatedTodos);
-      setGroups(updatedGroups);
-    } catch (error) {
+    const updatedTodos = todos.map(todo => todo.groupId === id ? { ...todo, groupId: undefined } : todo);
+    const updatedGroups = groups.filter(g => g.id !== id);
+    const previousTodos = todos;
+    const previousGroups = groups;
+    setTodos(updatedTodos);
+    setGroups(updatedGroups);
+    const userRef = doc(db, 'users', user.uid);
+    updateDoc(userRef, {
+      'todolist.todos': updatedTodos.map(serializeTodo),
+      'todolist.groups': updatedGroups.map(serializeGroup),
+    }).catch(error => {
       console.error('Error deleting group:', error);
-    }
+      setTodos(previousTodos);
+      setGroups(previousGroups);
+    });
   };
 
   // ── DnD handlers ──────────────────────────────────────────────────────────
@@ -224,32 +194,53 @@ export function TodoSection() {
 
   const handleDragEnd = () => {
     setDraggingTodoId(null);
-    setDragOverColumnId(null);
+    setDragOverZoneKey(null);
   };
 
   const handleDragOver = (e: React.DragEvent, columnId: string | null) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    setDragOverColumnId(columnId ?? 'null');
+    setDragOverZoneKey(columnId ?? 'null');
   };
 
-  const handleDrop = async (e: React.DragEvent, targetGroupId: string | null) => {
+  const handleDragOverToday = (e: React.DragEvent, columnId: string | null) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverZoneKey('today:' + (columnId ?? 'null'));
+  };
+
+  const handleDrop = (e: React.DragEvent, targetGroupId: string | null) => {
     e.preventDefault();
     const todoId = e.dataTransfer.getData('text/plain');
     if (!todoId || !user) return;
     setDraggingTodoId(null);
-    setDragOverColumnId(null);
+    setDragOverZoneKey(null);
     const todo = todos.find(t => t.id === todoId);
     if (!todo) return;
     const currentGroupId = todo.groupId ?? null;
     if (currentGroupId === targetGroupId) return;
-    try {
-      await saveTodos(todos.map(t =>
-        t.id === todoId ? { ...t, groupId: targetGroupId ?? undefined } : t
-      ));
-    } catch (error) {
-      console.error('Error moving todo:', error);
-    }
+    saveTodos(todos.map(t =>
+      t.id === todoId ? { ...t, groupId: targetGroupId ?? undefined } : t
+    ));
+  };
+
+  const handleDropToToday = (e: React.DragEvent, targetGroupId: string | null) => {
+    e.preventDefault();
+    const todoId = e.dataTransfer.getData('text/plain');
+    if (!todoId || !user) return;
+    setDraggingTodoId(null);
+    setDragOverZoneKey(null);
+    const todo = todos.find(t => t.id === todoId);
+    if (!todo) return;
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    const currentGroupId = todo.groupId ?? null;
+    const status = todo.dueDate ? getDueDateStatus(todo.dueDate) : null;
+    const alreadyToday = status === 'today' || status === 'overdue';
+    if (currentGroupId === targetGroupId && alreadyToday) return;
+    saveTodos(todos.map(t =>
+      t.id === todoId ? { ...t, groupId: targetGroupId ?? undefined, dueDate: todayDate } : t
+    ));
   };
 
   // ── Build column data ────────────────────────────────────────────────────
@@ -279,7 +270,7 @@ export function TodoSection() {
   const commonProps = {
     groups,
     draggingTodoId,
-    dragOverColumnId,
+    dragOverZoneKey,
     onEditSave: saveEdit,
     onToggleComplete: toggleComplete,
     onDelete: deleteTodo,
@@ -291,6 +282,8 @@ export function TodoSection() {
     onDragEnd: handleDragEnd,
     onDragOver: handleDragOver,
     onDrop: handleDrop,
+    onDragOverToday: handleDragOverToday,
+    onDropToToday: handleDropToToday,
   };
 
   return (
