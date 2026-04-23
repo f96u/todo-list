@@ -6,6 +6,7 @@ import { db } from '../firebase/config';
 import { useAuth } from '../provider/AuthProvider';
 import { KanbanColumn, Todo } from './KanbanColumn';
 import { Group, GROUP_COLORS } from './GroupSection';
+import { TodayOverviewColumn } from './TodayOverviewColumn';
 import { parseDueDate, getDueDateStatus } from '../utils/parseDueDate';
 
 function serializeTodo(todo: Todo) {
@@ -288,6 +289,21 @@ export function TodoSection() {
 
   return (
     <div className="flex gap-4 pb-4 overflow-x-auto">
+      {/* 今日やること（全グループ横断ビュー） */}
+      <TodayOverviewColumn
+        todos={todos}
+        groups={groups}
+        onEditSave={saveEdit}
+        onToggleComplete={toggleComplete}
+        onDelete={deleteTodo}
+        onClearDueDate={clearDueDate}
+        onSetBlocked={setBlocked}
+        onUnblock={unblock}
+      />
+
+      {/* 区切り線 */}
+      <div className="self-stretch w-px bg-gray-200 dark:bg-gray-700 shrink-0 mx-1" />
+
       {/* インボックス */}
       <KanbanColumn
         columnId={null}
