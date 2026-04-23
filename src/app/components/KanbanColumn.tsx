@@ -545,7 +545,7 @@ export function KanbanColumn({
                 if (e.key === 'Enter' && e.metaKey) handleAddSubmit();
                 if (e.key === 'Escape') { setIsAdding(false); setAddingText(''); }
               }}
-              placeholder="タスクを入力..."
+              placeholder="タスクを入力... (例: 報告書作成 来週金曜日)"
               className="flex-1 px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               autoFocus
             />

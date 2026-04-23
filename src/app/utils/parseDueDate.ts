@@ -1,5 +1,6 @@
 const WEEKDAYS: Record<string, number> = {
   '日曜': 0, '月曜': 1, '火曜': 2, '水曜': 3, '木曜': 4, '金曜': 5, '土曜': 6,
+  '日曜日': 0, '月曜日': 1, '火曜日': 2, '水曜日': 3, '木曜日': 4, '金曜日': 5, '土曜日': 6,
 };
 
 function parseToken(token: string): Date | null {
@@ -31,7 +32,7 @@ function parseToken(token: string): Date | null {
   }
 
   if (token.startsWith('来週') && token.slice(2) in WEEKDAYS) {
-    const targetDay = WEEKDAYS[token.slice(2)];
+    const targetDay = WEEKDAYS[token.slice(2)]; // e.g. 来週金曜 or 来週金曜日
     // 今週の月曜日を起点に、来週の該当曜日を計算
     const currentDay = today.getDay();
     const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
