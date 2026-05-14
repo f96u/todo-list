@@ -45,7 +45,7 @@ Firestore
 │
 └── users (コレクション)
     │
-    └── {userId} (ドキュメントID = 匿名認証のUID)
+    └── {userId} (ドキュメントID = 認証のUID)
         │
         ├── todolist (オブジェクト)
         │   └── todos (配列)
@@ -61,8 +61,8 @@ Firestore
         │       │   └── createdAt: Timestamp
         │       └── ...
         │
-        └── expireAt (Timestamp)
-            └── 作成日から7日後の日時
+        └── expireAt (Timestamp, 匿名ユーザーのみ)
+            └── 作成日から7日後（Firestore TTLで自動削除）
 ```
 
 ## データ構造
@@ -70,7 +70,7 @@ Firestore
 ```
 Firestore
 └── users/
-    └── {userId}/  (ユーザーID = 匿名認証のUID)
+    └── {userId}/  (ユーザーID = 認証のUID)
         ├── todolist: {
         │     todos: [
         │       {
@@ -82,7 +82,7 @@ Firestore
         │       ...
         │     ]
         │   }
-        └── expireAt: Timestamp  (作成日から7日後)
+        └── expireAt: Timestamp  (匿名ユーザーのみ、作成日から7日後)
 ```
 
 ## 認証フロー
@@ -93,7 +93,7 @@ Firestore
 
 2. **データ取得**
    - 認証完了後、`users/{userId}`ドキュメントから`todolist.todos`を取得
-   - ドキュメントが存在しない場合は、空の配列と`expireAt`（7日後）で初期化
+   - ドキュメントが存在しない場合は空の配列で初期化。匿名ユーザーの場合のみ、作成日から7日後の`expireAt`をセット（Firestore TTLで自動削除対象）
 
 3. **データ操作**
    - Todoの追加・編集・削除・完了状態の変更はすべて`users/{userId}`ドキュメントを更新

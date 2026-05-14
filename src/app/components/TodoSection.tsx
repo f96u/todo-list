@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getDoc, setDoc, updateDoc, doc, Timestamp } from 'firebase/firestore';
+import { getDoc, setDoc, updateDoc, doc, Timestamp, deleteField } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../provider/AuthProvider';
 import { KanbanColumn, Todo } from './KanbanColumn';
@@ -64,6 +64,11 @@ export function TodoSection() {
             })
           );
           setGroups(groupsData);
+          if (!user.isAnonymous && data.expireAt !== undefined) {
+            updateDoc(userRef, { expireAt: deleteField() }).catch(error => {
+              console.error('Error removing expireAt:', error);
+            });
+          }
         } else {
           const docData: { todolist: { todos: []; groups: [] }; expireAt?: Timestamp } = {
             todolist: { todos: [], groups: [] },
